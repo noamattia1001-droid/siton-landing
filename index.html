@@ -878,6 +878,92 @@ footer {
   .blob, .scroll-cue, .eyebrow-dot { animation: none !important; }
   .reveal { opacity: 1; transform: none; transition: none; }
 }
+
+/* ═══════════════════════════════════════════════
+   3D & SPOTLIGHT — 21st.dev style
+═══════════════════════════════════════════════ */
+
+/* Spotlight on bento cards */
+.bento-card {
+  --spotlight-x: 50%;
+  --spotlight-y: 50%;
+  --spotlight-opacity: 0;
+}
+.bento-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    280px circle at var(--spotlight-x) var(--spotlight-y),
+    rgba(201,168,76,0.13),
+    transparent 70%
+  );
+  opacity: var(--spotlight-opacity);
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 1;
+}
+.bento-card:hover { --spotlight-opacity: 1; }
+
+/* 3D perspective wrapper for cards */
+.bento-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Border Beam on form card */
+.form-card {
+  --beam-pos: 0%;
+  overflow: hidden;
+}
+.form-card::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--beam-pos),
+    transparent 0deg,
+    var(--gold) 60deg,
+    var(--gold-bright) 90deg,
+    var(--amber) 120deg,
+    transparent 180deg
+  );
+  z-index: -1;
+  animation: beamSpin 4s linear infinite;
+  opacity: 0.7;
+}
+@keyframes beamSpin {
+  to { --beam-pos: 360deg; }
+}
+@property --beam-pos {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Magnetic button — JS adds transform */
+.btn-primary, .submit-btn {
+  will-change: transform;
+}
+
+/* Parallax hero image */
+.hero-img-frame {
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+/* Stats counter */
+.stat-card .num {
+  transition: none;
+}
+
+/* Float animation for form card */
+@keyframes formFloat {
+  0%,100% { transform: translateY(0px); }
+  50%      { transform: translateY(-10px); }
+}
 </style>
 </head>
 <body>
@@ -1361,17 +1447,226 @@ footer {
   </div>
 </footer>
 
-<!-- ═══════════════════════════════════════════
-     SCROLL REVEAL — Intersection Observer
-════════════════════════════════════════════ -->
-<script>
-(function () {
-  const io = new IntersectionObserver(
-    entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }),
-    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+<!-- ═══════════════════════════════════════════════════
+     MOTION v11 — Framer Motion (vanilla) + 21st.dev 3D
+═══════════════════════════════════════════════════ -->
+<script type="module">
+import {
+  animate, scroll, inView, spring, stagger
+} from "https://cdn.jsdelivr.net/npm/motion@11.11.17/+esm";
+
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ── Init: hide .reveal elements so Motion controls them ── */
+document.querySelectorAll('.reveal').forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(36px) rotateX(8deg)';
+  el.style.transformStyle = 'preserve-3d';
+  const cls = [...el.classList].find(c => /^reveal-d\d$/.test(c));
+  if (cls) el.dataset.delay = (parseInt(cls.slice(-1)) * 0.08).toFixed(2);
+});
+
+/* ══════════════════════════════════════════════
+   1. SPRING SCROLL REVEAL (replaces IO CSS)
+══════════════════════════════════════════════ */
+if (!reduced) {
+  inView('.reveal', ({ target }) => {
+    animate(
+      target,
+      { opacity: [0, 1], y: [36, 0], rotateX: [8, 0] },
+      { duration: 0.75, delay: parseFloat(target.dataset.delay || 0),
+        easing: spring({ stiffness: 90, damping: 18 }) }
+    );
+    return () => {};
+  }, { amount: 0.12 });
+} else {
+  document.querySelectorAll('.reveal').forEach(el => {
+    el.style.opacity = '1'; el.style.transform = 'none';
+  });
+}
+
+/* ══════════════════════════════════════════════
+   2. 3D TILT + SPOTLIGHT on Bento Cards  (21st.dev)
+══════════════════════════════════════════════ */
+if (!reduced) {
+  document.querySelectorAll('.bento-card').forEach(card => {
+    let raf;
+    card.addEventListener('mouseenter', () => {
+      animate(card, { scale: 1.03 }, { duration: 0.3, easing: 'ease-out' });
+    });
+    card.addEventListener('mousemove', e => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width  - 0.5;
+        const y = (e.clientY - r.top)  / r.height - 0.5;
+        card.style.setProperty('--spotlight-x', `${(x + 0.5) * 100}%`);
+        card.style.setProperty('--spotlight-y', `${(y + 0.5) * 100}%`);
+        animate(card, {
+          rotateY: x * 18, rotateX: -y * 18,
+          transformPerspective: 900,
+        }, { duration: 0.08, easing: 'linear' });
+      });
+    });
+    card.addEventListener('mouseleave', () => {
+      cancelAnimationFrame(raf);
+      animate(card, { rotateX: 0, rotateY: 0, scale: 1 },
+        { duration: 0.55, easing: spring({ stiffness: 200, damping: 25 }) });
+      card.style.setProperty('--spotlight-x', '50%');
+      card.style.setProperty('--spotlight-y', '50%');
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════
+   3. HERO IMAGE 3D tilt on mouse
+══════════════════════════════════════════════ */
+if (!reduced) {
+  const heroSection = document.querySelector('.hero');
+  const heroFrame   = document.querySelector('.hero-img-frame');
+  if (heroSection && heroFrame) {
+    heroSection.addEventListener('mousemove', e => {
+      const dx = (e.clientX / window.innerWidth  - 0.5);
+      const dy = (e.clientY / window.innerHeight - 0.5);
+      animate(heroFrame, {
+        rotateY: dx * 9, rotateX: -dy * 6,
+        transformPerspective: 1200,
+      }, { duration: 0.15, easing: 'linear' });
+    });
+    heroSection.addEventListener('mouseleave', () => {
+      animate(heroFrame, { rotateX: 0, rotateY: 0 },
+        { duration: 0.9, easing: spring({ stiffness: 120, damping: 20 }) });
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════
+   4. SCROLL PARALLAX — hero image depth (21st.dev)
+══════════════════════════════════════════════ */
+if (!reduced) {
+  const heroImg = document.querySelector('.hero-img-frame');
+  const heroSec = document.querySelector('.hero');
+  if (heroImg && heroSec) {
+    scroll(
+      animate(heroImg, { y: [0, -80], scale: [1, 1.07] }),
+      { target: heroSec, offset: ['start start', 'end start'] }
+    );
+  }
+}
+
+/* ══════════════════════════════════════════════
+   5. MAGNETIC BUTTON — Framer Motion signature effect
+══════════════════════════════════════════════ */
+if (!reduced) {
+  document.querySelectorAll('.btn-primary, .submit-btn').forEach(btn => {
+    let raf;
+    btn.style.willChange = 'transform';
+    btn.addEventListener('mousemove', e => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = btn.getBoundingClientRect();
+        const x = e.clientX - (r.left + r.width  / 2);
+        const y = e.clientY - (r.top  + r.height / 2);
+        animate(btn, { x: x * 0.28, y: y * 0.28 },
+          { duration: 0.12, easing: 'linear' });
+      });
+    });
+    btn.addEventListener('mouseleave', () => {
+      cancelAnimationFrame(raf);
+      animate(btn, { x: 0, y: 0 },
+        { duration: 0.6, easing: spring({ stiffness: 200, damping: 20 }) });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════
+   6. FLOATING form card
+══════════════════════════════════════════════ */
+if (!reduced) {
+  const formCard = document.querySelector('.form-card');
+  if (formCard) {
+    inView(formCard, () => {
+      animate(formCard,
+        { y: [0, -10, 0] },
+        { duration: 4.2, repeat: Infinity, easing: 'ease-in-out', delay: 0.8 }
+      );
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════
+   7. PHOTO CARDS 3D tilt
+══════════════════════════════════════════════ */
+if (!reduced) {
+  document.querySelectorAll('.photo-card, .ps-card').forEach(card => {
+    card.style.transformStyle = 'preserve-3d';
+    card.addEventListener('mousemove', e => {
+      const r = card.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width  - 0.5;
+      const y = (e.clientY - r.top)  / r.height - 0.5;
+      animate(card, {
+        rotateY: x * 14, rotateX: -y * 10,
+        transformPerspective: 700, scale: 1.03,
+      }, { duration: 0.1, easing: 'linear' });
+    });
+    card.addEventListener('mouseleave', () => {
+      animate(card, { rotateX: 0, rotateY: 0, scale: 1 },
+        { duration: 0.55, easing: spring({ stiffness: 180, damping: 22 }) });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════
+   8. COUNTER animation on stats
+══════════════════════════════════════════════ */
+[
+  { sel: '.stats-row .stat-card:nth-child(1) .num', from: 1,   to: 2,  fmt: v => `×${v.toFixed(0)}` },
+  { sel: '.stats-row .stat-card:nth-child(2) .num', from: 0,   to: 2,  fmt: v => `${v.toFixed(0)}h` },
+  { sel: '.stats-row .stat-card:nth-child(3) .num', from: 0,   to: 4,  fmt: v => `${v.toFixed(0)}y` },
+].forEach(({ sel, from, to, fmt }) => {
+  const el = document.querySelector(sel);
+  if (!el) return;
+  inView(el, () => {
+    animate(from, to, {
+      duration: 2, easing: [0.16, 1, 0.3, 1],
+      onUpdate: v => { el.textContent = fmt(v); },
+    });
+  }, { amount: 0.8 });
+});
+
+/* ══════════════════════════════════════════════
+   9. SOLUTION ITEMS — stagger slide from right (RTL)
+══════════════════════════════════════════════ */
+if (!reduced) {
+  inView('.solution-list', ({ target }) => {
+    const items = [...target.querySelectorAll('.solution-item')];
+    items.forEach(it => { it.style.opacity = '0'; });
+    animate(items,
+      { opacity: [0, 1], x: [50, 0] },
+      { duration: 0.55, delay: stagger(0.1),
+        easing: spring({ stiffness: 100, damping: 20 }) }
+    );
+  }, { amount: 0.1 });
+}
+
+/* ══════════════════════════════════════════════
+   10. HERO BADGE spring pop entrance
+══════════════════════════════════════════════ */
+if (!reduced) {
+  const badge = document.querySelector('.hero-badge');
+  if (badge) {
+    animate(badge, { scale: [0.7, 1.08, 1], opacity: [0, 1] },
+      { duration: 0.9, delay: 0.25,
+        easing: spring({ stiffness: 220, damping: 16 }) });
+  }
+  /* stagger hero text entrance */
+  animate(
+    ['.hero-headline', '.hero-sub', '.hero-cta-wrap'],
+    { opacity: [0, 1], y: [30, 0] },
+    { duration: 0.8, delay: stagger(0.13, { start: 0.4 }),
+      easing: spring({ stiffness: 80, damping: 18 }) }
   );
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-})();
+}
 </script>
 
 </body>
