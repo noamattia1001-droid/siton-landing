@@ -1447,6 +1447,23 @@ footer {
   </div>
 </footer>
 
+<!-- fallback: show everything if JS/CDN fails -->
+<style>
+  body:not(.motion-ready) .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+</style>
+<script>
+  /* Safety net: if Motion CDN doesn't load in 4s, show all content */
+  window._motionFallback = setTimeout(() => {
+    document.querySelectorAll('.reveal').forEach(el => {
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+    });
+  }, 4000);
+</script>
+
 <!-- ═══════════════════════════════════════════════════
      MOTION v11 — Framer Motion (vanilla) + 21st.dev 3D
 ═══════════════════════════════════════════════════ -->
@@ -1455,30 +1472,33 @@ import {
   animate, scroll, inView, spring, stagger
 } from "https://cdn.jsdelivr.net/npm/motion@11.11.17/+esm";
 
+/* Motion loaded — cancel fallback, signal body */
+clearTimeout(window._motionFallback);
+document.body.classList.add('motion-ready');
+
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ── Init: hide .reveal elements so Motion controls them ── */
+/* ── Hide .reveal ONLY after Motion is confirmed loaded ── */
 document.querySelectorAll('.reveal').forEach(el => {
   el.style.opacity = '0';
-  el.style.transform = 'translateY(36px) rotateX(8deg)';
-  el.style.transformStyle = 'preserve-3d';
+  el.style.transform = 'translateY(36px)';
   const cls = [...el.classList].find(c => /^reveal-d\d$/.test(c));
   if (cls) el.dataset.delay = (parseInt(cls.slice(-1)) * 0.08).toFixed(2);
 });
 
 /* ══════════════════════════════════════════════
-   1. SPRING SCROLL REVEAL (replaces IO CSS)
+   1. SPRING SCROLL REVEAL
 ══════════════════════════════════════════════ */
 if (!reduced) {
   inView('.reveal', ({ target }) => {
     animate(
       target,
-      { opacity: [0, 1], y: [36, 0], rotateX: [8, 0] },
-      { duration: 0.75, delay: parseFloat(target.dataset.delay || 0),
+      { opacity: [0, 1], y: [36, 0] },
+      { duration: 0.7, delay: parseFloat(target.dataset.delay || 0),
         easing: spring({ stiffness: 90, damping: 18 }) }
     );
     return () => {};
-  }, { amount: 0.12 });
+  }, { amount: 0.1 });
 } else {
   document.querySelectorAll('.reveal').forEach(el => {
     el.style.opacity = '1'; el.style.transform = 'none';
